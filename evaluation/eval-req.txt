@@ -1,0 +1,11 @@
+numpy==1.25.2
+cloudpathlib
+huggingface_hub
+requests
+open-clip-torch==2.26.1
+clip-benchmark
+scikit-learn
+webdataset==0.2.48
+tqdm
+datasets
+wilds
