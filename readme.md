@@ -1,53 +1,94 @@
-# Tune-Up Open-Weight CLIP: Optimization Framework for Self-Supervised Fine-tuning of CLIP
+<div align="center">
 
-**Accepted as a NeurIPS 2026 Spotlight**
+# TuneCLIP
 
-TuneCLIP is a two-stage optimization framework for self-supervised fine-tuning (SSFT) of open-weight CLIP models. It first recovers the optimizer statistics at the pretrained solution with **Optimizer Statistics Recovery (OSR)**, then fine-tunes the model with **Hinged Global Contrastive Learning (HGCL)**.
+### Tune-Up Open-Weight CLIP: Optimization Framework for Self-Supervised Fine-tuning of CLIP
 
-<p align="center">
-  <img src="Imgs/TuneCLIP_starter.png" alt="TuneCLIP starter overview" width="900">
-</p>
+**NeurIPS 2026 · Spotlight**
 
-## Why TuneCLIP?
+[![Paper](https://img.shields.io/badge/Paper-arXiv%3A2601.09859-B31B1B?style=flat-square)](https://arxiv.org/abs/2601.09859)
+[![Conference](https://img.shields.io/badge/NeurIPS_2026-Spotlight-6842C2?style=flat-square)](#)
+[![Model](https://img.shields.io/badge/Backbone-Open--Weight_CLIP-2563EB?style=flat-square)](#method)
 
-Standard Self-supervised fine-tuning can immediately degrade a pretrained CLIP model. TuneCLIP fixes this mismatch and leads to improvements right from first epoch.
+**Recover optimizer statistics. Preserve pretrained knowledge. Fine-tune with HGCL.**
 
-<p align="center">
-  <img src="Imgs/drop-openai-clip.png" alt="Zero-shot classification performance before and during TuneCLIP training" width="900">
-</p>
+[Overview](#overview) · [Method](#method) · [Installation](#installation) · [Training](#training) · [Evaluation](#datacomp-evaluation) · [Citation](#citation)
+
+</div>
+
+---
+
+## Overview
+
+**TuneCLIP** is a two-stage optimization framework for **self-supervised fine-tuning (SSFT)** of open-weight CLIP models. It first recovers optimizer statistics at the pretrained solution through **Optimizer Statistics Recovery (OSR)**, then fine-tunes the model using **Hinged Global Contrastive Learning (HGCL)**.
+
+Standard self-supervised fine-tuning can degrade a pretrained CLIP model immediately. TuneCLIP addresses the optimizer mismatch and reduces the influence of false negatives, enabling improvements from the first fine-tuning epoch.
+
+<table>
+  <tr>
+    <th align="center" width="50%">The TuneCLIP Framework</th>
+    <th align="center" width="50%">Fine-tuning Without the Initial Drop</th>
+  </tr>
+  <tr>
+    <td align="center" valign="middle">
+      <img src="Imgs/TuneCLIP_starter.png" alt="Overview of the two-stage TuneCLIP framework" width="100%">
+    </td>
+    <td align="center" valign="middle">
+      <img src="Imgs/drop-openai-clip.png" alt="Zero-shot classification performance before and during fine-tuning" width="100%">
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      Recover optimizer statistics, then fine-tune with HGCL.
+    </td>
+    <td align="center">
+      Improve pretrained CLIP from the first fine-tuning epoch.
+    </td>
+  </tr>
+</table>
 
 ## Method
 
-Below are instructions to run the two stages:
+| Stage | Component | Purpose | Model weights |
+| :--- | :--- | :--- | :--- |
+| **1** | Optimizer Statistics Recovery (**OSR**) | Recover optimizer and contrastive statistics at the pretrained solution | Fixed |
+| **2** | Hinged Global Contrastive Learning (**HGCL**) | Fine-tune while limiting unnecessary repulsion of negatives | Updated |
 
-### Stage 1: Optimizer Statistics Recovery (OSR)
+### Stage 1 · Optimizer Statistics Recovery
 
-OSR addresses cold-start bias without changing the pretrained model:
+OSR addresses cold-start bias while keeping the pretrained model parameters fixed at `ω₀`.
 
-- Keep the model parameters fixed at `ω₀`.
-- Run the SogCLR/FastCLIP update computation over the self-supervised dataset.
-- Recover the Adam first moment `m`, second moment `v`, and statistics such as `uᵢ,ₓ` and `uᵢ,𝓏`.
-- Do not apply parameter updates during this stage (`--lr 0.0` in the supplied script).
+1. Run the SogCLR/FastCLIP update computation over the self-supervised dataset.
+2. Recover Adam's first and second moments, `m` and `v`, together with the per-sample statistics `uᵢ,ₓ` and `uᵢ,𝓏`.
+3. Save the recovered state for subsequent fine-tuning.
 
-The recovered `m`, `v`, `uᵢ,ₓ`, and `uᵢ,𝓏` values are saved in the Stage 1 checkpoint and initialized into Stage 2. In the paper, five OSR epochs are sufficient for stable subsequent fine-tuning.
+Parameter updates are disabled with `--lr 0.0`. The recovered statistics are saved in the Stage 1 checkpoint and restored in Stage 2.
 
-### Stage 2: Hinged Global Contrastive Learning (HGCL)
+**In the paper, five OSR epochs are sufficient for stable subsequent fine-tuning.**
 
-Web-scale image-text data contains **false negatives**: an image and a non-matching caption in the batch may still be semantically related. Standard GCL keeps pushing every negative similarity below the positive similarity, which can distort useful pretrained representations.
+### Stage 2 · Hinged Global Contrastive Learning
 
-HGCL replaces the linear pairwise penalty with a squared hinge surrogate. The same form is used for text-anchored pairs. Therefore, a negative receives no gradient once it is sufficiently below the positive similarity.
+Web-scale image–text datasets contain **false negatives**: an image and a non-matching caption may still be semantically related. Continuing to push these pairs apart can distort useful pretrained representations.
 
-The margin controls the trade-off between retaining semantically related false negatives and separating true negatives. TuneCLIP resumes the OSR checkpoint and enables HGCL with `--hinge_sogclr`, using `m = 0.1` and `margin_smoothing = 2` in the supplied recipe.
+HGCL uses a **squared hinge surrogate** for the pairwise penalty, applied symmetrically to image- and text-anchored pairs. A negative receives no gradient from this penalty once its similarity is sufficiently below the positive similarity.
+
+The margin controls the trade-off between preserving semantically related pairs and separating true negatives.
+
+**Supplied recipe:** resume the OSR checkpoint and enable HGCL with `--hinge_sogclr`, `--margin 0.1`, and `--margin_smoothing 2`.
 
 ## Installation
 
-Create a training environment from the repository root:
+Run the following commands from the repository root.
+
+**Training dependencies**
 
 ```bash
 pip install -r requirements-training.txt
 ```
 
-For evaluation, install the evaluation dependencies instead (or in a separate environment):
+**Evaluation dependencies**
+
+Install these in the same environment or a separate evaluation environment:
 
 ```bash
 pip install -r requirements-eval.txt
@@ -55,17 +96,19 @@ pip install -r requirements-eval.txt
 
 ## Training
 
-Before submitting either job, update the project directory, dataset paths, checkpoint paths, environment name, and SLURM directives in the scripts.
+> [!IMPORTANT]
+> Before submitting either job, update the project directory, dataset paths, checkpoint paths, environment name, and SLURM directives in the supplied scripts.
 
-### Stage 1: OSR
+### 1. Recover optimizer statistics
 
-`Scripts_TuneCLIP/run_osr.sh` starts from an OpenAI ViT-B/16 checkpoint and recovers optimizer statistics while keeping the model weights fixed.
+The OSR script starts from an **OpenAI ViT-B/16** checkpoint and recovers optimizer statistics with fixed model weights.
 
 ```bash
 sbatch Scripts_TuneCLIP/run_osr.sh
 ```
 
-The essential command is:
+<details>
+<summary><strong>View the OSR training command</strong></summary>
 
 ```bash
 srun python -u src/training/main.py \
@@ -81,15 +124,18 @@ srun python -u src/training/main.py \
   --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 4
 ```
 
-### Stage 2: OSR + HGCL
+</details>
 
-Set `--resume` to the Stage 1 checkpoint, then submit. This restores both model weights and the optimizer/statistical state recovered by OSR:
+### 2. Fine-tune with HGCL
+
+Set `--resume` to the Stage 1 checkpoint. This restores the model weights and the optimizer/statistical state recovered by OSR.
 
 ```bash
 sbatch Scripts_TuneCLIP/run_hgcl.sh
 ```
 
-The essential command is:
+<details>
+<summary><strong>View the HGCL fine-tuning command</strong></summary>
 
 ```bash
 srun python -u src/training/main.py \
@@ -106,41 +152,54 @@ srun python -u src/training/main.py \
   --gamma 0.9 --gamma_schedule cosine --gamma_decay_epochs 4
 ```
 
-## DataComp evaluation
+</details>
 
-After training, edit `evaluation/slurm_evaluate.sh` with the project, output, dataset, model, and checkpoint paths. Then run:
+## DataComp Evaluation
+
+Edit `evaluation/slurm_evaluate.sh` to specify the project, output directory, dataset, model, and checkpoint paths.
 
 ```bash
 cd evaluation
 sbatch slurm_evaluate.sh
 ```
 
-The evaluation script invokes:
+<details>
+<summary><strong>View the evaluation command</strong></summary>
+
+The model architecture must match the checkpoint being evaluated. For the ViT-B/16 recipe above:
 
 ```bash
 python evaluate.py \
   --train_output_dir "/path/to/your/project/train_output_dir" \
   --data_dir "/path/to/your/project/datasets/datacomp" \
-  --model ViT-B-32 \
+  --model ViT-B-16 \
   --task datacomp \
-  --use_model "ViT-B-32 /checkpoints/sample.pt"
+  --use_model "ViT-B-16 /path/to/checkpoints/sample.pt"
 ```
 
-Results are written under the selected output directory as `<task>.jsonl`.
+</details>
 
-## Repository structure
+Results are saved to the selected output directory as `<task>.jsonl`.
+
+## Repository Structure
 
 ```text
-Scripts_TuneCLIP/
-├── run_osr.sh       # Stage 1: OSR warm-up
-└── run_hgcl.sh      # Stage 2: OSR + HGCL
-evaluation/
-└── slurm_evaluate.sh
-src/
-└── training/
+.
+├── Imgs/                         # Framework and performance figures
+├── Scripts_TuneCLIP/
+│   ├── run_osr.sh                # Stage 1: recover optimizer statistics
+│   └── run_hgcl.sh               # Stage 2: fine-tune with HGCL
+├── evaluation/
+│   └── slurm_evaluate.sh         # DataComp evaluation
+├── src/
+│   └── training/                 # Training implementation
+├── requirements-training.txt
+└── requirements-eval.txt
 ```
 
 ## Citation
+
+If you use TuneCLIP in your research, please cite:
 
 ```bibtex
 @article{mehta2026breaking,
