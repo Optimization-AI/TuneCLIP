@@ -52,7 +52,7 @@ Standard self-supervised fine-tuning can degrade a pretrained CLIP model immedia
 | Stage | Component | Purpose | Model weights |
 | :--- | :--- | :--- | :--- |
 | **1** | Optimizer Statistics Recovery (**OSR**) | Recover optimizer and contrastive statistics at the pretrained solution | Fixed |
-| **2** | Hinged Global Contrastive Learning (**HGCL**) | Fine-tune while limiting unnecessary repulsion of negatives | Updated |
+| **2** | Hinged Global Contrastive Loss (**HGCL**) | Fine-tune while limiting unnecessary repulsion of negatives | Updated |
 
 ### Stage 1 · Optimizer Statistics Recovery
 
@@ -66,7 +66,7 @@ Parameter updates are disabled with `--lr 0.0`. The recovered statistics are sav
 
 **In the paper, five OSR epochs are sufficient for stable subsequent fine-tuning.**
 
-### Stage 2 · Hinged Global Contrastive Learning
+### Stage 2 · Hinged Global Contrastive Loss
 
 Web-scale image–text datasets contain **false negatives**: an image and a non-matching caption may still be semantically related. Continuing to push these pairs apart can distort useful pretrained representations.
 
